@@ -8,6 +8,15 @@ export * from './registry';
 export * from './base-connector';
 export * from './connection-pool';
 
+// Resilience patterns
+export { CircuitBreaker, Bulkhead, ResilienceManager } from './resilience-patterns';
+export type {
+  CircuitBreakerOptions,
+  BulkheadOptions,
+  RetryOptions,
+  ResilienceOptions,
+} from './resilience-patterns';
+
 // Export connector implementations
 export { WebflowConnector } from './connectors/webflow';
 export { SlackConnector } from './connectors/slack';
