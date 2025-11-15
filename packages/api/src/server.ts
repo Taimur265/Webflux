@@ -5,7 +5,6 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
 import { flowsRouter } from './routes/flows';
@@ -14,12 +13,15 @@ import { connectorsRouter } from './routes/connectors';
 import { webhooksRouter } from './routes/webhooks';
 import { errorHandler } from './middleware/error-handler';
 import { requestLogger } from './middleware/logger';
+import { metricsMiddleware, metricsHandler, healthCheckHandler } from './middleware/metrics';
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const METRICS_ENABLED = process.env.METRICS_ENABLED !== 'false';
+const DISTRIBUTED_RATE_LIMIT_ENABLED = process.env.REDIS_HOST && process.env.DISTRIBUTED_RATE_LIMIT !== 'false';
 
 // Security middleware
 app.use(helmet());
@@ -30,14 +32,33 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
-});
+// Metrics middleware (if enabled)
+if (METRICS_ENABLED) {
+  app.use(metricsMiddleware());
+}
 
-app.use('/api/', limiter);
+// Rate limiting (distributed if Redis available, otherwise in-memory)
+if (DISTRIBUTED_RATE_LIMIT_ENABLED) {
+  const { createDefaultRateLimiters } = require('./middleware/distributed-rate-limiter');
+  const rateLimiters = createDefaultRateLimiters({
+    host: process.env.REDIS_HOST,
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    password: process.env.REDIS_PASSWORD,
+  });
+
+  app.use('/api/', rateLimiters.api);
+  console.log('✅ Distributed rate limiting enabled (Redis)');
+} else {
+  // Fallback to in-memory rate limiting
+  const rateLimit = require('express-rate-limit');
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: 'Too many requests from this IP, please try again later.',
+  });
+  app.use('/api/', limiter);
+  console.log('⚠️  Using in-memory rate limiting (Redis not configured)');
+}
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
@@ -47,13 +68,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
 
 // Health check
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    version: '0.1.0',
-    timestamp: new Date().toISOString(),
-  });
-});
+app.get('/health', healthCheckHandler);
+
+// Metrics endpoint (Prometheus)
+if (METRICS_ENABLED) {
+  app.get('/metrics', metricsHandler);
+}
 
 // API routes
 app.use('/api/flows', flowsRouter);
