@@ -1,0 +1,51 @@
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY turbo.json ./
+COPY tsconfig.json ./
+
+# Copy all packages
+COPY packages ./packages
+
+# Install dependencies
+RUN npm install
+
+# Build all packages
+RUN npm run build
+
+# Production stage
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install production dependencies only
+COPY package*.json ./
+RUN npm install --production
+
+# Copy built packages
+COPY --from=builder /app/packages/schema/dist ./packages/schema/dist
+COPY --from=builder /app/packages/schema/package.json ./packages/schema/
+COPY --from=builder /app/packages/engine/dist ./packages/engine/dist
+COPY --from=builder /app/packages/engine/package.json ./packages/engine/
+COPY --from=builder /app/packages/connectors/dist ./packages/connectors/dist
+COPY --from=builder /app/packages/connectors/package.json ./packages/connectors/
+COPY --from=builder /app/packages/storage/dist ./packages/storage/dist
+COPY --from=builder /app/packages/storage/package.json ./packages/storage/
+
+# Copy worker entry point
+COPY --from=builder /app/packages/engine/dist/worker-entry.js ./worker-entry.js
+
+# Set environment
+ENV NODE_ENV=production
+
+# Worker doesn't expose ports, it connects to Redis queue
+
+# Health check (worker liveness)
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD node -e "process.exit(0)"
+
+# Run worker
+CMD ["node", "worker-entry.js"]

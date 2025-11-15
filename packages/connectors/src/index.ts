@@ -6,6 +6,7 @@
 export * from './types';
 export * from './registry';
 export * from './base-connector';
+export * from './connection-pool';
 
 // Export connector implementations
 export { WebflowConnector } from './connectors/webflow';
