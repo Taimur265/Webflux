@@ -1,0 +1,42 @@
+# Lead Capture Flow - DSL Example
+
+flow "Lead Capture" {
+  # Define the webhook trigger
+  trigger webhook(path="/hooks/lead", method="POST") -> create_lead
+
+  # Create lead in Webflow CMS
+  node create_lead: webflow.createItem(
+    collection="leads",
+    fields={
+      name: "{{trigger.body.name}}",
+      email: "{{trigger.body.email}}",
+      source: "website-form"
+    }
+  )
+
+  # Notify sales team on Slack
+  node notify: slack.postMessage(
+    channel="#sales",
+    text="New lead: {{create_lead.result.fields.name}} - {{create_lead.result.url}}"
+  )
+
+  # Send confirmation email
+  node confirm_email: smtp.send(
+    to="{{trigger.body.email}}",
+    from="hello@yoursite.com",
+    subject="Thanks for your interest!",
+    html="<h1>Thanks {{trigger.body.name}}!</h1>"
+  )
+
+  # Trigger preview deployment
+  node deploy: deploy.preview(
+    site_id="site_abc",
+    build_hook="vault://netlify_preview_hook"
+  )
+
+  # Define connections
+  create_lead -> notify
+  create_lead -> confirm_email
+  notify -> deploy
+  confirm_email -> deploy
+}

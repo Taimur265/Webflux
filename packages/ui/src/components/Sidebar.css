@@ -1,0 +1,72 @@
+.sidebar {
+  width: 300px;
+  background: white;
+  border-right: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 1rem;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sidebar-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.btn-new {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.btn-new:hover {
+  background: #5568d3;
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.loading,
+.empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #666;
+}
+
+.flow-list {
+  list-style: none;
+}
+
+.flow-item {
+  padding: 1rem;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.flow-item:hover {
+  background: #f8f8f8;
+}
+
+.flow-name {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.flow-description {
+  font-size: 0.875rem;
+  color: #666;
+}
