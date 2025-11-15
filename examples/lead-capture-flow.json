@@ -1,0 +1,265 @@
+{
+  "flow_id": "flow_lead_capture_001",
+  "name": "Lead Capture → CMS → Slack → Deploy",
+  "description": "Automated lead capture flow: receives form submission, creates CMS entry, notifies team, and triggers preview deployment",
+  "version": 1,
+  "graph": {
+    "pages": [
+      {
+        "id": "p_home",
+        "path": "/",
+        "title": "Home",
+        "nodes": ["component_hero", "component_form"],
+        "meta": {
+          "description": "Home page with lead capture form",
+          "keywords": ["leads", "contact", "demo"]
+        }
+      }
+    ],
+    "nodes": [
+      {
+        "id": "component_hero",
+        "category": "component",
+        "type": "HeroComponent",
+        "name": "Hero Section",
+        "connector": null,
+        "operation": null,
+        "params": {
+          "headline": "Transform Your Website with AI",
+          "subheadline": "Build, automate, and optimize websites using the power of Claude AI",
+          "cta_text": "Get Started Free",
+          "cta_url": "#contact"
+        },
+        "inputs": [],
+        "outputs": ["html", "component_json"],
+        "ui_hints": {
+          "x": 100,
+          "y": 100,
+          "summary": "Hero section with CTA"
+        }
+      },
+      {
+        "id": "component_form",
+        "category": "component",
+        "type": "FormComponent",
+        "name": "Contact Form",
+        "connector": null,
+        "operation": null,
+        "params": {
+          "fields": ["name", "email", "company"],
+          "submit_url": "/hooks/lead"
+        },
+        "inputs": [],
+        "outputs": ["html"],
+        "ui_hints": {
+          "x": 100,
+          "y": 250,
+          "summary": "Lead capture form"
+        }
+      },
+      {
+        "id": "trigger_webhook",
+        "category": "trigger",
+        "type": "http.webhook",
+        "name": "Form Submit Webhook",
+        "connector": null,
+        "operation": null,
+        "params": {
+          "path": "/hooks/lead",
+          "method": "POST",
+          "auth": "signing_secret"
+        },
+        "inputs": [],
+        "outputs": ["body", "headers"],
+        "ui_hints": {
+          "x": 300,
+          "y": 100,
+          "color": "#3b82f6",
+          "summary": "Webhook for form submissions"
+        }
+      },
+      {
+        "id": "create_lead",
+        "category": "action",
+        "type": "webflow.createItem",
+        "name": "Create CMS Lead",
+        "connector": "webflow",
+        "operation": "createItem",
+        "params": {
+          "collection": "leads",
+          "fields": {
+            "name": "{{trigger_webhook.body.name}}",
+            "email": "{{trigger_webhook.body.email}}",
+            "company": "{{trigger_webhook.body.company}}",
+            "source": "website-form",
+            "status": "new"
+          }
+        },
+        "inputs": [
+          {
+            "from": "trigger_webhook",
+            "port": "body"
+          }
+        ],
+        "outputs": ["result"],
+        "retry": {
+          "max_attempts": 3,
+          "strategy": "exponential"
+        },
+        "timeout_seconds": 10,
+        "ui_hints": {
+          "x": 500,
+          "y": 100,
+          "color": "#10b981",
+          "summary": "Creates lead in Webflow CMS"
+        },
+        "preview": {
+          "request_preview": {
+            "collection": "leads",
+            "fields": {
+              "name": "Alice Smith",
+              "email": "alice@example.com",
+              "company": "Acme Corp"
+            }
+          },
+          "expected_result_schema": {
+            "id": "string",
+            "url": "string",
+            "created_at": "ISO8601",
+            "fields": "object"
+          }
+        }
+      },
+      {
+        "id": "notify_slack",
+        "category": "action",
+        "type": "slack.postMessage",
+        "name": "Notify Sales Team",
+        "connector": "slack",
+        "operation": "postMessage",
+        "params": {
+          "channel": "#sales",
+          "text": "🎉 New lead captured!\n\n*Name:* {{create_lead.result.fields.name}}\n*Email:* {{create_lead.result.fields.email}}\n*Company:* {{create_lead.result.fields.company}}\n\n<{{create_lead.result.url}}|View in CMS>"
+        },
+        "inputs": [
+          {
+            "from": "create_lead",
+            "port": "result"
+          }
+        ],
+        "outputs": ["message"],
+        "retry": {
+          "max_attempts": 2,
+          "strategy": "fixed"
+        },
+        "timeout_seconds": 5,
+        "ui_hints": {
+          "x": 700,
+          "y": 100,
+          "color": "#8b5cf6",
+          "summary": "Post to #sales channel"
+        }
+      },
+      {
+        "id": "send_confirmation",
+        "category": "action",
+        "type": "smtp.send",
+        "name": "Send Confirmation Email",
+        "connector": "smtp",
+        "operation": "send",
+        "params": {
+          "to": "{{trigger_webhook.body.email}}",
+          "from": "hello@yoursite.com",
+          "subject": "Thanks for your interest!",
+          "html": "<h1>Thanks {{trigger_webhook.body.name}}!</h1><p>We've received your request and will be in touch soon.</p>"
+        },
+        "inputs": [
+          {
+            "from": "trigger_webhook",
+            "port": "body"
+          }
+        ],
+        "outputs": ["message"],
+        "retry": {
+          "max_attempts": 3,
+          "strategy": "exponential"
+        },
+        "timeout_seconds": 10,
+        "ui_hints": {
+          "x": 700,
+          "y": 250,
+          "color": "#f59e0b",
+          "summary": "Send auto-reply email"
+        }
+      },
+      {
+        "id": "trigger_preview",
+        "category": "publish",
+        "type": "deploy.preview",
+        "name": "Trigger Preview Build",
+        "connector": "netlify",
+        "operation": "triggerBuild",
+        "params": {
+          "site_id": "site_abc123",
+          "build_hook": "vault://netlify_preview_hook"
+        },
+        "inputs": [
+          {
+            "from": "notify_slack",
+            "port": "message"
+          },
+          {
+            "from": "send_confirmation",
+            "port": "message"
+          }
+        ],
+        "outputs": ["deploy"],
+        "timeout_seconds": 60,
+        "ui_hints": {
+          "x": 900,
+          "y": 175,
+          "color": "#ef4444",
+          "summary": "Deploy preview build"
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from": "trigger_webhook",
+        "to": "create_lead"
+      },
+      {
+        "from": "create_lead",
+        "to": "notify_slack"
+      },
+      {
+        "from": "trigger_webhook",
+        "to": "send_confirmation"
+      },
+      {
+        "from": "notify_slack",
+        "to": "trigger_preview"
+      },
+      {
+        "from": "send_confirmation",
+        "to": "trigger_preview"
+      }
+    ],
+    "triggers": [
+      {
+        "id": "t1",
+        "type": "http.webhook",
+        "config": {
+          "path": "/hooks/lead"
+        },
+        "to_node": "create_lead"
+      }
+    ]
+  },
+  "metadata": {
+    "owner": "team@example.com",
+    "created_at": "2025-11-15T00:00:00Z",
+    "modified_at": null,
+    "tags": ["leads", "marketing", "automation"]
+  }
+}

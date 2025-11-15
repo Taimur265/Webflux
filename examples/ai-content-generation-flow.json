@@ -1,0 +1,280 @@
+{
+  "flow_id": "flow_ai_content_001",
+  "name": "AI Blog Post Generator",
+  "description": "Automated blog post creation: AI generates content, creates hero image, optimizes SEO, creates CMS entry, and publishes",
+  "version": 1,
+  "graph": {
+    "pages": [],
+    "nodes": [
+      {
+        "id": "trigger_manual",
+        "category": "trigger",
+        "type": "manual",
+        "name": "Manual Trigger",
+        "connector": null,
+        "operation": null,
+        "params": {},
+        "inputs": [],
+        "outputs": ["trigger_data"],
+        "ui_hints": {
+          "x": 100,
+          "y": 200,
+          "color": "#3b82f6",
+          "summary": "Start blog generation"
+        }
+      },
+      {
+        "id": "generate_outline",
+        "category": "ai",
+        "type": "AI_CopyGen",
+        "name": "Generate Blog Outline",
+        "connector": "ai",
+        "operation": "generateStructured",
+        "params": {
+          "prompt_template": "Create a detailed blog post outline about {{trigger_manual.trigger_data.topic}}. Include 5-7 main sections with bullet points for each. Target audience: {{trigger_manual.trigger_data.audience}}. Tone: professional and engaging.",
+          "max_tokens": 1000,
+          "schema": {
+            "title": "string",
+            "intro": "string",
+            "sections": [
+              {
+                "heading": "string",
+                "points": ["string"]
+              }
+            ],
+            "conclusion": "string"
+          }
+        },
+        "inputs": [
+          {
+            "from": "trigger_manual",
+            "port": "trigger_data"
+          }
+        ],
+        "outputs": ["data"],
+        "timeout_seconds": 30,
+        "ui_hints": {
+          "x": 300,
+          "y": 200,
+          "color": "#8b5cf6",
+          "summary": "AI generates outline"
+        }
+      },
+      {
+        "id": "generate_content",
+        "category": "ai",
+        "type": "AI_CopyGen",
+        "name": "Generate Full Content",
+        "connector": "ai",
+        "operation": "generate",
+        "params": {
+          "prompt_template": "Write a complete, engaging blog post based on this outline:\n\nTitle: {{generate_outline.data.title}}\n\nOutline:\n{{generate_outline.data.sections}}\n\nWrite 2-3 paragraphs for each section. Use a professional yet friendly tone. Include practical examples.",
+          "max_tokens": 3000,
+          "tone": "professional"
+        },
+        "inputs": [
+          {
+            "from": "generate_outline",
+            "port": "data"
+          }
+        ],
+        "outputs": ["text"],
+        "timeout_seconds": 60,
+        "ui_hints": {
+          "x": 500,
+          "y": 150,
+          "color": "#8b5cf6",
+          "summary": "AI writes full blog post"
+        }
+      },
+      {
+        "id": "generate_hero_image",
+        "category": "ai",
+        "type": "AI_AssetGen",
+        "name": "Generate Hero Image",
+        "connector": "ai",
+        "operation": "generateImage",
+        "params": {
+          "prompt_template": "Professional blog header image for: {{generate_outline.data.title}}. Modern, clean design. Technology theme.",
+          "size": "1200x630",
+          "format": "jpg"
+        },
+        "inputs": [
+          {
+            "from": "generate_outline",
+            "port": "data"
+          }
+        ],
+        "outputs": ["asset_ref", "url"],
+        "timeout_seconds": 45,
+        "ui_hints": {
+          "x": 500,
+          "y": 250,
+          "color": "#8b5cf6",
+          "summary": "AI generates cover image"
+        }
+      },
+      {
+        "id": "optimize_seo",
+        "category": "ai",
+        "type": "AI_SEOFix",
+        "name": "Optimize SEO",
+        "connector": "ai",
+        "operation": "generateStructured",
+        "params": {
+          "prompt_template": "Generate SEO-optimized metadata for this blog post:\n\nTitle: {{generate_outline.data.title}}\nContent: {{generate_content.text}}\n\nProvide: SEO title (60 chars), meta description (160 chars), keywords, and open graph data.",
+          "max_tokens": 500,
+          "schema": {
+            "seo_title": "string",
+            "meta_description": "string",
+            "keywords": ["string"],
+            "og_title": "string",
+            "og_description": "string"
+          }
+        },
+        "inputs": [
+          {
+            "from": "generate_outline",
+            "port": "data"
+          },
+          {
+            "from": "generate_content",
+            "port": "text"
+          }
+        ],
+        "outputs": ["data"],
+        "timeout_seconds": 20,
+        "ui_hints": {
+          "x": 700,
+          "y": 200,
+          "color": "#8b5cf6",
+          "summary": "AI optimizes SEO metadata"
+        }
+      },
+      {
+        "id": "create_blog_post",
+        "category": "action",
+        "type": "webflow.createItem",
+        "name": "Create Blog Post in CMS",
+        "connector": "webflow",
+        "operation": "createItem",
+        "params": {
+          "collection": "blog-posts",
+          "fields": {
+            "name": "{{generate_outline.data.title}}",
+            "slug": "auto-generated",
+            "post-body": "{{generate_content.text}}",
+            "main-image": "{{generate_hero_image.url}}",
+            "seo-title": "{{optimize_seo.data.seo_title}}",
+            "seo-description": "{{optimize_seo.data.meta_description}}",
+            "keywords": "{{optimize_seo.data.keywords}}",
+            "author": "AI Content Generator",
+            "published": false
+          }
+        },
+        "inputs": [
+          {
+            "from": "generate_content",
+            "port": "text"
+          },
+          {
+            "from": "generate_hero_image",
+            "port": "url"
+          },
+          {
+            "from": "optimize_seo",
+            "port": "data"
+          }
+        ],
+        "outputs": ["result"],
+        "retry": {
+          "max_attempts": 3,
+          "strategy": "exponential"
+        },
+        "timeout_seconds": 15,
+        "ui_hints": {
+          "x": 900,
+          "y": 200,
+          "color": "#10b981",
+          "summary": "Save to CMS"
+        }
+      },
+      {
+        "id": "notify_editors",
+        "category": "action",
+        "type": "slack.postMessage",
+        "name": "Notify Editorial Team",
+        "connector": "slack",
+        "operation": "postMessage",
+        "params": {
+          "channel": "#editorial",
+          "text": "📝 New AI-generated blog post ready for review!\n\n*Title:* {{generate_outline.data.title}}\n*Word Count:* {{generate_content.word_count}}\n*Status:* Draft\n\n<{{create_blog_post.result.url}}|Review in CMS>"
+        },
+        "inputs": [
+          {
+            "from": "create_blog_post",
+            "port": "result"
+          }
+        ],
+        "outputs": ["message"],
+        "ui_hints": {
+          "x": 1100,
+          "y": 200,
+          "color": "#f59e0b",
+          "summary": "Notify team for review"
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from": "trigger_manual",
+        "to": "generate_outline"
+      },
+      {
+        "from": "generate_outline",
+        "to": "generate_content"
+      },
+      {
+        "from": "generate_outline",
+        "to": "generate_hero_image"
+      },
+      {
+        "from": "generate_content",
+        "to": "optimize_seo"
+      },
+      {
+        "from": "generate_outline",
+        "to": "optimize_seo"
+      },
+      {
+        "from": "generate_content",
+        "to": "create_blog_post"
+      },
+      {
+        "from": "generate_hero_image",
+        "to": "create_blog_post"
+      },
+      {
+        "from": "optimize_seo",
+        "to": "create_blog_post"
+      },
+      {
+        "from": "create_blog_post",
+        "to": "notify_editors"
+      }
+    ],
+    "triggers": [
+      {
+        "id": "t1",
+        "type": "manual",
+        "config": {},
+        "to_node": "generate_outline"
+      }
+    ]
+  },
+  "metadata": {
+    "owner": "content-team@example.com",
+    "created_at": "2025-11-15T00:00:00Z",
+    "tags": ["ai", "content", "blog", "automation"]
+  }
+}
